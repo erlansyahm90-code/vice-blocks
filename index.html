@@ -57,6 +57,22 @@
     background:rgba(30,8,30,.85);color:#fff;cursor:pointer}
   #pauseOverlay button:hover{background:#ff7ac0;color:#14101c}
 
+  /* ---------- Menu utama (gaya layar judul) ---------- */
+  #startOverlay{align-items:flex-start;justify-content:center;text-align:left;padding:0 7vw;cursor:default;
+    background:linear-gradient(90deg,rgba(12,5,26,.80) 0%,rgba(12,5,26,.48) 46%,rgba(12,5,26,.06) 76%),
+               linear-gradient(0deg,rgba(12,5,26,.55),rgba(12,5,26,0) 42%)}
+  #startOverlay h1{font-size:min(76px,12vw)}
+  #startOverlay h2{margin:6px 0 4px}
+  .menuList{margin-top:30px;display:flex;flex-direction:column;gap:4px}
+  .menuBtn{pointer-events:auto;background:none;border:none;color:#fff;font-family:inherit;font-size:21px;font-weight:600;
+    letter-spacing:1.5px;text-align:left;padding:8px 12px 8px 30px;cursor:pointer;position:relative;
+    text-shadow:0 2px 6px rgba(0,0,0,.85);-webkit-tap-highlight-color:transparent}
+  .menuBtn:hover{color:#ffd83d}
+  .menuBtn.sel{color:#ffd83d}
+  .menuBtn.sel::before{content:'\25B6';position:absolute;left:4px;font-size:17px;top:11px}
+  #howCard{margin-top:20px;max-width:min(440px,86vw)}
+  .fineprint{position:absolute;left:7vw;bottom:14px;font-size:10.5px;color:rgba(255,255,255,.55);max-width:min(560px,84vw);line-height:1.55}
+
   /* ---------- Kotak error (diagnostik di overlay awal) ---------- */
   #vbError{display:none;max-width:88%;margin-top:16px;background:rgba(120,8,16,.92);border:2px solid #ff5f6d;border-radius:10px;
     color:#fff;font:12px/1.5 Consolas,Menlo,monospace;padding:10px 14px;text-align:left;white-space:pre-wrap;word-break:break-word}
@@ -115,17 +131,22 @@
 
 <div class="overlay" id="startOverlay">
   <h1>VICE BLOCKS</h1>
-  <h2>MINI OPEN WORLD &mdash; LATIHAN</h2>
-  <div class="card">
-    <div><b>W A S D / ←↑→↓</b> Jalan / Nyetir</div>
+  <h2>SEBUAH CERITA KRIMINAL DI KOTA SENJA</h2>
+  <div class="menuList">
+    <button class="menuBtn" id="menuContinue" style="display:none">LANJUTKAN</button>
+    <button class="menuBtn sel" id="menuNew">GAME BARU</button>
+    <button class="menuBtn" id="menuHow">CARA MAIN</button>
+  </div>
+  <div class="card" id="howCard" style="display:none">
+    <div><b>W A S D / &#8592;&#8593;&#8595;&#8594;</b> Jalan / Nyetir</div>
     <div><b>SHIFT</b> Lari (saat jalan kaki)</div>
     <div><b>F</b> Masuk / Keluar Mobil</div>
-    <div><b>Mouse drag</b> Putar kamera</div>
+    <div><b>Seret layar</b> Putar kamera</div>
     <div><b>ESC / P</b> Pause</div>
-    <div style="margin-top:8px;color:#ffd9ec">Misi 1: capai pilar cahaya pink di <b style="min-width:0;color:#ff7ac0">Pink Motel</b></div>
+    <div style="margin-top:8px;color:#ffd9ec">Misi 1: capai pilar cahaya pink di <b style="min-width:0;color:#ff7ac0">Pink Motel</b>, lanjut ke dermaga. Di HP pakai tombol di layar.</div>
   </div>
-  <div class="go">&#9654; KLIK UNTUK MULAI</div>
   <div id="vbError" role="alert"></div>
+  <div class="fineprint">Latihan open-world prosedural yang jalan 100% di browser: kota senja 7x7 blok, mobil bisa dikendarai, 2 misi, bintang wanted. Progres tersimpan otomatis di perangkat ini — pakai LANJUTKAN untuk meneruskan permainan terakhir.</div>
 </div>
 
 <script>
@@ -148,30 +169,44 @@
   });
   if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
   var ov = document.getElementById('startOverlay');
-  function tryStart(){
-    window.__vbStarted = true;
+  function tryStart(mode){
     if (window.PG && typeof window.PG.start === 'function'){
-      window.PG.start();
+      window.__vbStartMode = mode;
+      window.__vbStarted = true;
+      window.PG.start(mode);
       if (ov) ov.style.display = 'none';
       return true;
     }
     return false;
   }
-  function start(){
-    if (tryStart()) return;
+  function start(mode){
+    window.__vbStartMode = mode;
+    if (tryStart(mode)) return;
     var n = 0;
     var iv = setInterval(function(){
       n++;
-      if (tryStart()){ clearInterval(iv); return; }
+      if (tryStart(mode)){ clearInterval(iv); return; }
       if (n >= 40){
         clearInterval(iv);
         showError('Game gagal dimuat (mesin game tidak merespons). Coba muat ulang halaman ini.');
       }
     }, 100);
   }
-  if (ov){
-    ov.addEventListener('click', start);
-    ov.addEventListener('touchend', function(e){ e.preventDefault(); start(); }, { passive:false });
+  function bindStart(id, mode){
+    var b = document.getElementById(id);
+    if (!b) return;
+    b.addEventListener('click', function(){ start(mode); });
+    b.addEventListener('touchend', function(e){ e.preventDefault(); start(mode); }, { passive:false });
+  }
+  bindStart('menuNew', 'new');
+  bindStart('menuContinue', 'continue');
+  var howBtn = document.getElementById('menuHow'), howCard = document.getElementById('howCard');
+  if (howBtn && howCard){
+    var toggleHow = function(){
+      howCard.style.display = (howCard.style.display === 'none' || !howCard.style.display) ? 'block' : 'none';
+    };
+    howBtn.addEventListener('click', toggleHow);
+    howBtn.addEventListener('touchend', function(e){ e.preventDefault(); toggleHow(); }, { passive:false });
   }
 })();
 </script>

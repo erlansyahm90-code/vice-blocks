@@ -27,7 +27,7 @@ const renderer = (() => {
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.outputEncoding = THREE.sRGBEncoding;
     r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 1.12;
+    r.toneMappingExposure = 1.3;
     r.domElement.className = 'webgl';
     document.getElementById('game').appendChild(r.domElement);
     return r;
@@ -38,7 +38,7 @@ const renderer = (() => {
 })();
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xcf6a4a, 190, 760);
+scene.fog = new THREE.Fog(0xe08a5a, 240, 840);
 const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 2000);
 
 // Langit gradasi sunset (dome shader)
@@ -51,9 +51,9 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 2000
     fragmentShader: `varying vec3 vP;
       void main(){
         float h = normalize(vP).y;
-        vec3 top = vec3(0.13,0.07,0.28);
-        vec3 mid = vec3(0.55,0.18,0.38);
-        vec3 hor = vec3(1.00,0.58,0.32);
+        vec3 top = vec3(0.22,0.13,0.38);
+        vec3 mid = vec3(0.66,0.27,0.44);
+        vec3 hor = vec3(1.05,0.68,0.40);
         vec3 col = h > 0.28 ? mix(mid, top, smoothstep(0.28,0.85,h))
                             : mix(hor, mid, smoothstep(-0.02,0.28,h));
         gl_FragColor = vec4(col,1.0);
@@ -67,9 +67,9 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth/innerHeight, 0.1, 2000
 }
 
 // Cahaya
-const hemi = new THREE.HemisphereLight(0x9a7adf, 0x4a2c20, 0.55);
+const hemi = new THREE.HemisphereLight(0xb59ae0, 0x6a4230, 0.95);
 scene.add(hemi);
-const sunLight = new THREE.DirectionalLight(0xffa050, 1.35);
+const sunLight = new THREE.DirectionalLight(0xffa050, 1.5);
 sunLight.position.set(-260, 150, -180);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
@@ -77,7 +77,7 @@ sunLight.shadow.camera.left = -340; sunLight.shadow.camera.right = 340;
 sunLight.shadow.camera.top = 340; sunLight.shadow.camera.bottom = -340;
 sunLight.shadow.camera.far = 900; sunLight.shadow.bias = -0.0006;
 scene.add(sunLight);
-scene.add(new THREE.AmbientLight(0x604a70, 0.35));
+scene.add(new THREE.AmbientLight(0x8a6f9a, 0.5));
 
 // ---------- Tekstur tanah (satu kanvas besar: jalan, trotoar, air) ----------
 function makeGroundTexture(){
@@ -85,14 +85,14 @@ function makeGroundTexture(){
   const cv = document.createElement('canvas'); cv.width = cv.height = S;
   const g = cv.getContext('2d');
   const px = v => (v + WORLD_EDGE) * sc;
-  g.fillStyle = '#333039'; g.fillRect(0,0,S,S);                       // tanah luar
+  g.fillStyle = '#413f4a'; g.fillRect(0,0,S,S);                       // tanah luar
   // Laut di selatan (z > 296) + pasir
   const seaGrad = g.createLinearGradient(0, px(296), 0, px(384));
   seaGrad.addColorStop(0,'#1d5064'); seaGrad.addColorStop(1,'#0d2a3d');
   g.fillStyle = seaGrad; g.fillRect(0, px(296), S, px(384)-px(296));
   g.fillStyle = '#8a6a48'; g.fillRect(0, px(286), S, px(296)-px(286)); // pasir
   // Aspal utama area kota
-  g.fillStyle = '#2b2b31'; g.fillRect(px(-256), px(-256), 512*sc, 512*sc);
+  g.fillStyle = '#3b3b44'; g.fillRect(px(-256), px(-256), 512*sc, 512*sc);
   // Perpanjangan jalan ke dermaga (x=-96 ke selatan)
   g.fillRect(px(-104), px(224), 16*sc, (292-224)*sc);
   // Marka garis tengah jalan (kuning putus-putus)
@@ -104,9 +104,9 @@ function makeGroundTexture(){
   // Blok: trotoar + bidang dalam
   for (const i of BLOCKS) for (const j of BLOCKS){
     const cx = i*PITCH, cz = j*PITCH;
-    g.fillStyle = '#5d616b'; g.fillRect(px(cx-26), px(cz-26), 52*sc, 52*sc);
+    g.fillStyle = '#71757f'; g.fillRect(px(cx-26), px(cz-26), 52*sc, 52*sc);
     const isMotel = (cx===MOTEL_POS.x && cz===MOTEL_POS.z);
-    g.fillStyle = isMotel ? '#4c3543' : '#3a3e46';
+    g.fillStyle = isMotel ? '#4c3543' : '#4a4e59';
     g.fillRect(px(cx-22), px(cz-22), 44*sc, 44*sc);
   }
   const tex = new THREE.CanvasTexture(cv);
@@ -167,16 +167,55 @@ function makeFacade(base, litRatio){
   return new THREE.MeshLambertMaterial({ map, emissive: 0xffffff, emissiveMap: emis, emissiveIntensity: 0.9 });
 }
 const roofMat = new THREE.MeshLambertMaterial({ color: 0x2e2a33 });
-const facadeMats = ['#6b5a6e','#7a6a58','#5a6a7a','#746a80'].map((c,i)=>makeFacade(c, 0.34 + i*0.06));
+const facadeMats = ['#a08ba0','#b3a284','#8fa3b8','#c7ae8a','#bd93a8','#93b8ad','#ab97b8','#c2b49a'].map((c,i)=>makeFacade(c, 0.30 + (i%4)*0.07));
 function buildingMaterialSet(m){ return [m, m, roofMat, roofMat, m, m]; }
 
 const buildingGeoCache = new THREE.BoxGeometry(1,1,1);
+const slabMat = new THREE.MeshLambertMaterial({ color: 0x3a3642 });
+const roofPropMat = new THREE.MeshLambertMaterial({ color: 0x554f5e });
+const SIGN_WORDS = ['HOTEL','CASINO','BAR','DINER','CLUB','CAFE','BANK','MALL'];
 function addBuilding(cx, cz, w, d, h, mat){
-  const m = new THREE.Mesh(buildingGeoCache, buildingMaterialSet(mat || facadeMats[(Math.random()*facadeMats.length)|0]));
-  m.scale.set(w, h, d); m.position.set(cx, h/2, cz);
-  m.castShadow = true; m.receiveShadow = true;
-  scene.add(m); addBoxCollider(cx, cz, w, d);
-  return m;
+  const m = mat || facadeMats[(Math.random()*facadeMats.length)|0];
+  const grp = new THREE.Group(); grp.position.set(cx, 0, cz);
+  const v = Math.random();
+  let topY = h;
+  if (v < 0.34 && h > 20){
+    // Siluet bertingkat: badan lebar + menara lebih ramping di atasnya
+    const baseH = h * rand(0.45, 0.6);
+    const base = new THREE.Mesh(buildingGeoCache, buildingMaterialSet(m));
+    base.scale.set(w, baseH, d); base.position.y = baseH/2;
+    base.castShadow = true; base.receiveShadow = true; grp.add(base);
+    const tower = new THREE.Mesh(buildingGeoCache, buildingMaterialSet(m));
+    const tw = w * rand(0.6, 0.75), td = d * rand(0.6, 0.75);
+    tower.scale.set(tw, h - baseH, td); tower.position.y = baseH + (h - baseH)/2;
+    tower.castShadow = true; tower.receiveShadow = true; grp.add(tower);
+  } else {
+    const body = new THREE.Mesh(buildingGeoCache, buildingMaterialSet(m));
+    body.scale.set(w, h, d); body.position.y = h/2;
+    body.castShadow = true; body.receiveShadow = true; grp.add(body);
+    if (v < 0.62){
+      // Pelat atap menjorok + properti atap (kotak AC / tangki) supaya atap tidak polos
+      const slab = new THREE.Mesh(buildingGeoCache, slabMat);
+      slab.scale.set(w + 1.7, 0.55, d + 1.7); slab.position.y = h + 0.27; slab.castShadow = true; grp.add(slab);
+      const pw = rand(2, 4.5), pd = rand(2, 4.5), ph = rand(1, 2.4);
+      const prop = new THREE.Mesh(buildingGeoCache, roofPropMat);
+      prop.scale.set(pw, ph, pd);
+      prop.position.set(rand(-w/4, w/4), h + 0.55 + ph/2, rand(-d/4, d/4));
+      prop.castShadow = true; grp.add(prop);
+      topY = h + 0.55;
+    }
+  }
+  // Papan nama di atap untuk sebagian gedung tinggi
+  if (h > 30 && Math.random() < 0.4){
+    const word = SIGN_WORDS[(Math.random()*SIGN_WORDS.length)|0];
+    const tex = makeSignTexture([word], '#ffd83d', '#1c1030');
+    const face = new THREE.MeshBasicMaterial({ map: tex });
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(Math.min(w*0.8, 13), 2.6, 0.5),
+      [slabMat, slabMat, slabMat, slabMat, face, face]);
+    sign.position.set(0, topY + 1.6, 0); grp.add(sign);
+  }
+  scene.add(grp); addBoxCollider(cx, cz, w, d);
+  return grp;
 }
 
 // ---------- Pohon palem & lampu jalan (geometri dibagi) ----------
@@ -459,6 +498,37 @@ function renderStars(){
 function renderMoney(){ hud.money.textContent = '$' + S.money.toLocaleString('en-US'); }
 setMissionText(); renderStars(); renderMoney();
 
+// ---------- Simpan / lanjutkan (localStorage) ----------
+const SAVE_KEY = 'vbSaveV1';
+function saveGame(){
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ money: S.money, missionIdx: S.missionIdx, freeRoam: S.freeRoam })); } catch(e){}
+}
+function loadSave(){
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    return (s && typeof s.money === 'number' && typeof s.missionIdx === 'number') ? s : null;
+  } catch(e){ return null; }
+}
+function beginGame(mode){
+  if (S.started) return;
+  const sv = mode === 'continue' ? loadSave() : null;
+  if (sv){
+    S.money = sv.money | 0;
+    S.missionIdx = Math.min(Math.max(sv.missionIdx | 0, 0), MISSIONS.length);
+    S.freeRoam = !!sv.freeRoam || S.missionIdx >= MISSIONS.length;
+  } else {
+    S.money = 0; S.missionIdx = 0; S.freeRoam = false;
+    if (mode === 'new') saveGame();
+  }
+  if (S.freeRoam){ checkpoint.visible = false; }
+  else {
+    const t = MISSIONS[S.missionIdx].target;
+    checkpoint.position.set(t.x, 0, t.z); checkpoint.visible = true;
+  }
+  setMissionText(); renderMoney();
+  S.started = true; hud.start.style.display = 'none';
+}
+
 // ---------- Input ----------
 const keys = {};
 addEventListener('keydown', e => {
@@ -478,7 +548,12 @@ addEventListener('pointermove', e => {
   S.camPitch = clamp(S.camPitch + (e.clientY - lastMY) * 0.003, 0.08, 1.05);
   lastMX = e.clientX; lastMY = e.clientY; S.dragTimer = 1.6;
 });
-hud.start.addEventListener('click', () => { S.started = true; hud.start.style.display = 'none'; });
+el('menuNew').addEventListener('click', () => beginGame('new'));
+el('menuContinue').addEventListener('click', () => beginGame('continue'));
+if (loadSave()){
+  const mc = el('menuContinue'); mc.style.display = '';
+  el('menuNew').classList.remove('sel'); mc.classList.add('sel');
+}
 el('btnResume').addEventListener('click', togglePause);
 el('btnRestart').addEventListener('click', () => location.reload());
 
@@ -638,7 +713,7 @@ function updateMission(){
   const p = playerPos();
   const dx = p.x - m.target.x, dz = p.z - m.target.z;
   if (dx*dx + dz*dz < 5.2 * 5.2){
-    S.money += m.reward; renderMoney();
+    S.money += m.reward; renderMoney(); saveGame();
     showBanner('MISSION PASSED', '+$' + m.reward);
     S.missionIdx++;
     if (S.missionIdx >= MISSIONS.length){
@@ -658,9 +733,9 @@ const camTarget = new THREE.Vector3();
 function updateCamera(dt){
   if (!S.started){ // kamera orbit sinematik di balik overlay awal
     S.camYaw += dt * 0.045;
-    const cx = MOTEL_POS.x + Math.sin(S.camYaw) * 95, cz = MOTEL_POS.z + Math.cos(S.camYaw) * 95;
-    camera.position.set(cx, 34, cz);
-    camera.lookAt(MOTEL_POS.x, 6, MOTEL_POS.z);
+    const cx = MOTEL_POS.x + Math.sin(S.camYaw) * 105, cz = MOTEL_POS.z + Math.cos(S.camYaw) * 105;
+    camera.position.set(cx, 55, cz);
+    camera.lookAt(MOTEL_POS.x, 8, MOTEL_POS.z);
     return;
   }
   const target = playerPos();
@@ -712,12 +787,14 @@ function animate(){
   requestAnimationFrame(animate);
   // Bootstrap inline (index.html) bisa memulai game lewat window.__vbStarted,
   // mis. saat tap di HP terjadi sebelum listener di atas terpasang.
-  if (window.__vbStarted && !S.started){ S.started = true; hud.start.style.display = 'none'; }
+  if (window.__vbStarted && !S.started){ beginGame(window.__vbStartMode || 'new'); }
   const dt = Math.min(clock.getDelta(), 0.05);
   if (S.started && !S.paused){
     S.time += dt;
     if (S.mode === 'car') updateCar(dt); else updateFoot(dt);
     updateMission();
+    // simpan progres berkala (untuk menu LANJUTKAN)
+    if (S.time - (S.lastSave || 0) > 5){ S.lastSave = S.time; saveGame(); }
     // wanted decay
     if (S.wanted > 0){ S.wantedTimer -= dt; if (S.wantedTimer <= 0){ S.wanted--; S.wantedTimer = 4; renderStars(); } }
     // regen health
@@ -751,7 +828,7 @@ addEventListener('resize', () => {
 // ---------- Hook untuk pengujian/screenshot ----------
 window.PG = {
   state: S, car, character, THREE, circleColliders, boxColliders,
-  start(){ if (!S.started){ S.started = true; hud.start.style.display = 'none'; } },
+  start(mode){ beginGame(mode || 'new'); },
   enterCar(){ if (S.mode === 'foot'){ S.mode = 'car'; character.visible = false; } },
   exitCar(){ if (S.mode === 'car') tryToggleCar(); },
   teleportCar(x, z, heading){ car.position.set(x, 0, z); if (heading !== undefined){ S.carHeading = heading; } S.carSpeed = 0; },
