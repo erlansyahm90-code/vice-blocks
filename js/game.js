@@ -275,10 +275,13 @@ function populateCity(){
     for (const [ox, oz] of [[-24,-24],[24,-24],[-24,24],[24,24]])
       if (Math.random() < 0.55) addPalm(cx+ox+rand(-2,2), cz+oz+rand(-2,2));
   }
-  // lampu jalan di tepi jalan
+  // lampu jalan di tepi jalan (jangan taruh di tengah persimpangan: lewati posisi yang jatuh di sabuk jalan melintang)
+  const inRoadBand = v => ROAD_CENTERS.some(rc => Math.abs(v - rc) < 8);
+  const tryLampV = (x, z) => { if (!inRoadBand(z)) addLamp(x, z); };   // lampu untuk jalan vertikal (x ~ konstan)
+  const tryLampH = (x, z) => { if (!inRoadBand(x)) addLamp(x, z); };   // lampu untuk jalan horizontal (z ~ konstan)
   for (const c of ROAD_CENTERS) for (let t=-224; t<=224; t+=64){
-    addLamp(c-9, t + (Math.random()<0.5?0:32)); if (Math.random()<0.7) addLamp(c+9, t+16);
-    addLamp(t + (Math.random()<0.5?0:32), c-9); if (Math.random()<0.7) addLamp(t+16, c+9);
+    tryLampV(c-9, t + (Math.random()<0.5?0:32)); if (Math.random()<0.7) tryLampV(c+9, t+16);
+    tryLampH(t + (Math.random()<0.5?0:32), c-9); if (Math.random()<0.7) tryLampH(t+16, c+9);
   }
   // mobil parkir di pinggir jalan
   for (let k=0; k<10; k++){
@@ -540,7 +543,7 @@ function playerPos(){ return S.mode === 'car' ? car.position : character.positio
 function tryToggleCar(){
   if (!S.started || S.paused) return;
   if (S.mode === 'foot'){
-    if (character.position.distanceTo(car.position) < 3.6){
+    if (character.position.distanceTo(car.position) < 6.5){
       S.mode = 'car'; character.visible = false; hud.prompt.style.display = 'none';
     }
   } else {
@@ -624,7 +627,7 @@ function updateFoot(dt){
   p.legL.rotation.x = sw; p.legR.rotation.x = -sw;
   p.armL.rotation.x = -sw * 0.8; p.armR.rotation.x = sw * 0.8;
   // prompt interaksi
-  const near = character.position.distanceTo(car.position) < 3.6;
+  const near = character.position.distanceTo(car.position) < 6.5;
   hud.prompt.style.display = near ? 'block' : 'none';
 }
 
