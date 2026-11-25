@@ -128,6 +128,7 @@ function addBoxCollider(cx, cz, w, d){ boxColliders.push({ minX:cx-w/2, maxX:cx+
 function resolveCollisions(pos, r){
   let hit = false;
   for (const b of boxColliders){
+    if (b.off) continue;
     const nx = clamp(pos.x, b.minX, b.maxX), nz = clamp(pos.z, b.minZ, b.maxZ);
     let dx = pos.x-nx, dz = pos.z-nz; const d2 = dx*dx+dz*dz;
     if (d2 < r*r){
@@ -248,6 +249,7 @@ function addLamp(x, z){
 }
 
 // ---------- Mobil (dibangun dari primitif) ----------
+const cars = [];   // semua mobil di kota — semuanya bisa dinaiki & dikendarai
 const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.3, 12);
 const wheelMat = new THREE.MeshLambertMaterial({ color: 0x14141a });
 const glassMat = new THREE.MeshLambertMaterial({ color: 0x1b2a3a });
@@ -285,6 +287,8 @@ function makeCar(color, isPlayer){
     tl.position.set(0.62*s, 0.68, -2.16); grp.add(tl);
   }
   grp.userData.wheels = wheels;
+  grp.userData.heading = 0;
+  cars.push(grp);
   scene.add(grp);
   return grp;
 }
@@ -302,7 +306,9 @@ function populateCity(){
         const car = makeCar(PARKED_COLORS[(Math.random()*PARKED_COLORS.length)|0], false);
         car.position.set(cx + rand(-13,13), 0, cz + rand(-13,13));
         car.rotation.y = (Math.random()*4|0) * Math.PI/2 + rand(-0.06,0.06);
+        car.userData.heading = car.rotation.y;
         addBoxCollider(car.position.x, car.position.z, 3.4, 3.4);
+        car.userData.collider = boxColliders[boxColliders.length-1];
       }
     } else if (r < 0.42){ // dua gedung kecil
       addBuilding(cx-11, cz, rand(15,19), rand(24,34), rand(14,38));
@@ -329,7 +335,9 @@ function populateCity(){
     const t = rand(-230, 230);
     if (onX){ car.position.set(c-6.2, 0, t); car.rotation.y = 0; }
     else { car.position.set(t, 0, c-6.2); car.rotation.y = Math.PI/2; }
+    car.userData.heading = car.rotation.y;
     addBoxCollider(car.position.x, car.position.z, 3.4, 3.4);
+    car.userData.collider = boxColliders[boxColliders.length-1];
   }
 }
 
@@ -425,6 +433,9 @@ function makeCharacter(){
     return pivot;
   }
   const armL = limb(skin, 0.2, 0.78, -0.48, 1.5), armR = limb(skin, 0.2, 0.78, 0.48, 1.5);
+  const gun = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.16, 0.52),
+    new THREE.MeshLambertMaterial({ color: 0x17181d }));
+  gun.position.set(0, -0.8, 0.16); gun.castShadow = true; armR.add(gun);   // pistol di tangan kanan
   const legL = limb(pants, 0.26, 0.72, -0.2, 0.72), legR = limb(pants, 0.26, 0.72, 0.2, 0.72);
   grp.userData.parts = { armL, armR, legL, legR };
   scene.add(grp);
@@ -455,6 +466,10 @@ buildDock();
 // ---------- State permainan ----------
 const car = makeCar(0xd92323, true);
 car.position.set(38, 0, 30);
+car.userData.heading = 0;
+addBoxCollider(38, 30, 3.4, 3.4);
+car.userData.collider = boxColliders[boxColliders.length-1];
+let activeCar = car;   // mobil yang sedang dikendarai (bisa berganti ke mobil mana pun)
 const character = makeCharacter();
 character.position.set(34, 0, 20);
 
@@ -464,6 +479,7 @@ const S = {
   charHeading: Math.PI, walkPhase: 0,
   camYaw: Math.PI, camPitch: 0.34, dragTimer: 0,
   money: 0, health: 100, lastCrashAt: -9,
+  ammo: 12, reserve: 120, shotCd: 0, reloadT: 0, heat: 0, aimUntil: 0,
   wanted: 0, wantedTimer: 0,
   missionIdx: 0, freeRoam: false,
   time: 0,
@@ -478,7 +494,7 @@ checkpoint.position.set(CHECK1.x, 0, CHECK1.z);
 // ---------- DOM HUD ----------
 const el = id => document.getElementById(id);
 const hud = { mission: el('missionText'), banner: el('banner'), money: el('money'), stars: el('stars'),
-  health: el('healthFill'), prompt: el('prompt'), speedo: el('speedo'),
+  health: el('healthFill'), prompt: el('prompt'), speedo: el('speedo'), ammo: el('ammo'),
   start: el('startOverlay'), pause: el('pauseOverlay') };
 const mm = el('minimap').getContext('2d');
 function setMissionText(){
@@ -496,7 +512,12 @@ function renderStars(){
   hud.stars.innerHTML = h;
 }
 function renderMoney(){ hud.money.textContent = '$' + S.money.toLocaleString('en-US'); }
-setMissionText(); renderStars(); renderMoney();
+function renderAmmo(){
+  if (!hud.ammo) return;
+  hud.ammo.innerHTML = S.reloadT > 0 ? '&middot;&middot;&middot; <small>/ ' + S.reserve + '</small>'
+    : S.ammo + ' <small>/ ' + S.reserve + '</small>';
+}
+setMissionText(); renderStars(); renderMoney(); renderAmmo();
 
 // ---------- Simpan / lanjutkan (localStorage) ----------
 const SAVE_KEY = 'vbSaveV1';
@@ -531,13 +552,16 @@ function beginGame(mode){
 
 // ---------- Input ----------
 const keys = {};
+let fireHeld = false;
 addEventListener('keydown', e => {
   keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyF') tryToggleCar();
+  if (e.code === 'KeyJ') fireHeld = true;
+  if (e.code === 'KeyR') startReload();
   if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
 });
-addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'KeyJ') fireHeld = false; });
 const key = c => !!keys[c];
 let dragging = false, lastMX = 0, lastMY = 0;
 renderer.domElement.addEventListener('pointerdown', e => { dragging = true; lastMX = e.clientX; lastMY = e.clientY; });
@@ -609,27 +633,108 @@ el('btnRestart').addEventListener('click', () => location.reload());
     br.addEventListener('contextmenu', e => e.preventDefault());
   }
 })();
+// Tombol TEMBAK: tahan = menembak terus (menggerakkan fireHeld, sama seperti tombol J).
+(function(){
+  const bfire = el('tcFire');
+  if (!bfire) return;
+  bfire.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); fireHeld = true; bfire.classList.add('on'); fire(); });
+  const fOff = e => { if (e){ e.preventDefault(); e.stopPropagation(); } fireHeld = false; bfire.classList.remove('on'); };
+  bfire.addEventListener('pointerup', fOff);
+  bfire.addEventListener('pointercancel', fOff);
+  bfire.addEventListener('pointerleave', fOff);
+  bfire.addEventListener('contextmenu', e => e.preventDefault());
+})();
+
 function togglePause(){
   if (!S.started) return;
   S.paused = !S.paused;
   hud.pause.style.display = S.paused ? 'flex' : 'none';
 }
-function playerPos(){ return S.mode === 'car' ? car.position : character.position; }
+function playerPos(){ return S.mode === 'car' ? activeCar.position : character.position; }
+function nearestCar(maxD){
+  let best = null, bd = maxD;
+  for (const c of cars){
+    const d = character.position.distanceTo(c.position);
+    if (d < bd){ bd = d; best = c; }
+  }
+  return best;
+}
 function tryToggleCar(){
   if (!S.started || S.paused) return;
   if (S.mode === 'foot'){
-    if (character.position.distanceTo(car.position) < 6.5){
+    const c = nearestCar(6.5);
+    if (c){
+      activeCar = c;
+      S.carHeading = c.userData.heading || 0; S.carSpeed = 0; S.steer = 0;
+      if (c.userData.collider) c.userData.collider.off = true;
       S.mode = 'car'; character.visible = false; hud.prompt.style.display = 'none';
     }
   } else {
     S.mode = 'foot';
+    activeCar.userData.heading = S.carHeading;
+    if (activeCar.userData.collider){
+      const col = activeCar.userData.collider;
+      col.minX = activeCar.position.x - 1.7; col.maxX = activeCar.position.x + 1.7;
+      col.minZ = activeCar.position.z - 1.7; col.maxZ = activeCar.position.z + 1.7;
+      col.off = false;
+    }
     const side = new THREE.Vector3(Math.cos(S.carHeading), 0, -Math.sin(S.carHeading));
-    character.position.copy(car.position).addScaledVector(side, 2.4);
+    character.position.copy(activeCar.position).addScaledVector(side, 2.4);
     character.position.y = 0;
     resolveCollisions(character.position, 0.45);
     character.visible = true;
     S.charHeading = S.carHeading;
   }
+}
+
+// ---------- Menembak ----------
+function rayBox(ox, oz, dx, dz, b){
+  let tmin = 0, tmax = Infinity;
+  if (Math.abs(dx) < 1e-8){ if (ox < b.minX || ox > b.maxX) return null; }
+  else { let t1 = (b.minX - ox) / dx, t2 = (b.maxX - ox) / dx; if (t1 > t2){ const q = t1; t1 = t2; t2 = q; } tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2); if (tmin > tmax) return null; }
+  if (Math.abs(dz) < 1e-8){ if (oz < b.minZ || oz > b.maxZ) return null; }
+  else { let t1 = (b.minZ - oz) / dz, t2 = (b.maxZ - oz) / dz; if (t1 > t2){ const q = t1; t1 = t2; t2 = q; } tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2); if (tmin > tmax) return null; }
+  return tmin;
+}
+function rayCircle(ox, oz, dx, dz, cx, cz, r){
+  const lx = cx - ox, lz = cz - oz;
+  const tca = lx * dx + lz * dz; if (tca < 0) return null;
+  const d2 = lx * lx + lz * lz - tca * tca, r2 = r * r; if (d2 > r2) return null;
+  return tca - Math.sqrt(r2 - d2);
+}
+const fx = [];
+const tracerGeo = new THREE.BoxGeometry(0.06, 0.06, 1);
+const tracerMat = new THREE.MeshBasicMaterial({ color: 0xffe27a });
+const sparkGeo = new THREE.SphereGeometry(0.22, 8, 6);
+const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffa63d });
+function spawnFx(geo, mat, x, y, z, life, lookX, lookZ, len){
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, y, z);
+  if (len){ m.scale.z = len; m.lookAt(lookX, y, lookZ); }
+  scene.add(m); fx.push({ m, until: S.time + life });
+}
+function startReload(){
+  if (S.reloadT > 0 || S.reserve <= 0 || S.ammo >= 12) return;
+  S.reloadT = 1.15; renderAmmo();
+}
+function fire(){
+  if (!S.started || S.paused || S.reloadT > 0 || S.time < S.shotCd) return;
+  if (S.ammo <= 0){ startReload(); return; }
+  S.ammo--; S.shotCd = S.time + 0.17; S.aimUntil = S.time + 0.28; renderAmmo();
+  const h = S.mode === 'car' ? S.carHeading : S.charHeading;
+  const p = playerPos();
+  const dx = Math.sin(h), dz = Math.cos(h);
+  const ox = p.x + dx * 1.0, oz = p.z + dz * 1.0;
+  let bestT = 70, hitC = null;
+  for (const b of boxColliders){ if (b.off) continue; const t = rayBox(ox, oz, dx, dz, b); if (t !== null && t > 0.2 && t < bestT){ bestT = t; hitC = null; } }
+  for (const c of circleColliders){ if (c.tipped) continue; const t = rayCircle(ox, oz, dx, dz, c.x, c.z, c.r + 0.3); if (t !== null && t > 0.2 && t < bestT){ bestT = t; hitC = c; } }
+  const ex = ox + dx * bestT, ez = oz + dz * bestT;
+  spawnFx(tracerGeo, tracerMat, (ox + ex) / 2, 1.3, (oz + ez) / 2, 0.07, ex, ez, bestT);
+  spawnFx(sparkGeo, sparkMat, ox + dx * 0.7, 1.35, oz + dz * 0.7, 0.05);          // kilat moncong
+  if (bestT < 70){ spawnFx(sparkGeo, sparkMat, ex, 1.1, ez, 0.13); if (hitC && Math.random() < 0.5) tipOver(hitC); }
+  S.heat++;
+  if (S.heat >= 5){ S.heat = 0; S.wanted = Math.min(3, S.wanted + 1); S.wantedTimer = 9; renderStars(); }
+  if (S.ammo === 0) startReload();
 }
 
 // ---------- Update: mobil ----------
@@ -650,24 +755,24 @@ function updateCar(dt){
   const sf = clamp(Math.abs(S.carSpeed) / 9, 0, 1) * Math.sign(S.carSpeed);
   S.carHeading += S.steer * 2.1 * sf * dt / 0.55 * 0.55;      // laju belok proporsional
   const prevSpeed = S.carSpeed;
-  car.position.x += Math.sin(S.carHeading) * S.carSpeed * dt;
-  car.position.z += Math.cos(S.carHeading) * S.carSpeed * dt;
+  activeCar.position.x += Math.sin(S.carHeading) * S.carSpeed * dt;
+  activeCar.position.z += Math.cos(S.carHeading) * S.carSpeed * dt;
   // nabrak benda kecil (lampu/palem): robohkan kalau kencang
   for (const c of circleColliders){
     if (c.tipped) continue;
-    const dx = car.position.x - c.x, dz = car.position.z - c.z;
+    const dx = activeCar.position.x - c.x, dz = activeCar.position.z - c.z;
     if (dx*dx + dz*dz < 2.2*2.2 && Math.abs(S.carSpeed) > 7){ tipOver(c); S.carSpeed *= 0.72; }
   }
-  if (resolveCollisions(car.position, 1.75)){
+  if (resolveCollisions(activeCar.position, 1.75)){
     if (Math.abs(prevSpeed) > 20 && S.time - S.lastCrashAt > 0.7){
       S.health = Math.max(30, S.health - 5); S.lastCrashAt = S.time;
     }
     S.carSpeed *= -0.18;
   }
-  car.position.y = 0;
-  car.rotation.y = S.carHeading;
+  activeCar.position.y = 0;
+  activeCar.rotation.y = S.carHeading;
   const spin = S.carSpeed * dt / 0.42;
-  for (const w of car.userData.wheels) w.rotation.x += spin;
+  for (const w of activeCar.userData.wheels) w.rotation.x += spin;
   hud.speedo.style.display = 'block';
   hud.speedo.innerHTML = '<b>' + Math.round(Math.abs(S.carSpeed) * 3.2) + '</b> km/h';
 }
@@ -692,17 +797,20 @@ function updateFoot(dt){
     S.walkPhase += dt * (run ? 11 : 8);
   }
   resolveCollisions(character.position, 0.45);
-  // jangan menembus mobil sendiri
-  const dx = character.position.x - car.position.x, dz = character.position.z - car.position.z;
-  const d2 = dx*dx + dz*dz, rr = 2.15;
-  if (d2 < rr*rr && d2 > 1e-6){ const d = Math.sqrt(d2); character.position.x = car.position.x + dx/d*rr; character.position.z = car.position.z + dz/d*rr; }
+  // jangan menembus mobil mana pun
+  for (const c of cars){
+    const dx = character.position.x - c.position.x, dz = character.position.z - c.position.z;
+    const d2 = dx*dx + dz*dz, rr = 2.15;
+    if (d2 < rr*rr && d2 > 1e-6){ const d = Math.sqrt(d2); character.position.x = c.position.x + dx/d*rr; character.position.z = c.position.z + dz/d*rr; }
+  }
   character.position.y = 0;
   character.rotation.y = S.charHeading;
   const p = character.userData.parts, sw = moving ? Math.sin(S.walkPhase) * 0.62 : 0;
   p.legL.rotation.x = sw; p.legR.rotation.x = -sw;
   p.armL.rotation.x = -sw * 0.8; p.armR.rotation.x = sw * 0.8;
+  if (S.time < S.aimUntil) p.armR.rotation.x = -1.35;   // lengan mengacungkan pistol sesaat setelah menembak
   // prompt interaksi
-  const near = character.position.distanceTo(car.position) < 6.5;
+  const near = !!nearestCar(6.5);
   hud.prompt.style.display = near ? 'block' : 'none';
 }
 
@@ -772,8 +880,11 @@ function drawMinimap(){
     mm.beginPath(); mm.arc(tx, ty, 4 + Math.sin(S.time * 5) * 1.4, 0, Math.PI * 2); mm.fill();
     mm.strokeStyle = 'rgba(255,255,255,.8)'; mm.stroke();
   }
-  const [cx2, cy2] = w2m(car.position.x, car.position.z);                // titik mobil
-  mm.fillStyle = '#ff4040'; mm.beginPath(); mm.arc(cx2, cy2, 3, 0, Math.PI * 2); mm.fill();
+  for (const c of cars){                                                  // titik semua mobil (aktif = merah)
+    const [cx2, cy2] = w2m(c.position.x, c.position.z);
+    mm.fillStyle = c === activeCar ? '#ff4040' : '#aeb4bd';
+    mm.beginPath(); mm.arc(cx2, cy2, c === activeCar ? 3 : 2, 0, Math.PI * 2); mm.fill();
+  }
   const p = playerPos(), [pxx, pyy] = w2m(p.x, p.z);                     // panah pemain
   const h = S.mode === 'car' ? S.carHeading : S.charHeading;
   mm.save(); mm.translate(pxx, pyy); mm.rotate(Math.atan2(Math.sin(h), -Math.cos(h)));
@@ -795,6 +906,10 @@ function animate(){
     updateMission();
     // simpan progres berkala (untuk menu LANJUTKAN)
     if (S.time - (S.lastSave || 0) > 5){ S.lastSave = S.time; saveGame(); }
+    // efek tembakan + isi ulang + tembak tahan
+    for (let i = fx.length - 1; i >= 0; i--){ if (S.time > fx[i].until){ scene.remove(fx[i].m); fx.splice(i, 1); } }
+    if (S.reloadT > 0){ S.reloadT -= dt; if (S.reloadT <= 0){ const take = Math.min(12 - S.ammo, S.reserve); S.ammo += take; S.reserve -= take; renderAmmo(); } }
+    if (fireHeld) fire();
     // wanted decay
     if (S.wanted > 0){ S.wantedTimer -= dt; if (S.wantedTimer <= 0){ S.wanted--; S.wantedTimer = 4; renderStars(); } }
     // regen health
@@ -827,11 +942,13 @@ addEventListener('resize', () => {
 
 // ---------- Hook untuk pengujian/screenshot ----------
 window.PG = {
-  state: S, car, character, THREE, circleColliders, boxColliders,
+  state: S, car, cars, character, THREE, circleColliders, boxColliders,
+  get activeCar(){ return activeCar; },
   start(mode){ beginGame(mode || 'new'); },
-  enterCar(){ if (S.mode === 'foot'){ S.mode = 'car'; character.visible = false; } },
+  fire(){ fire(); },
+  enterCar(){ if (S.mode === 'foot') tryToggleCar(); },
   exitCar(){ if (S.mode === 'car') tryToggleCar(); },
-  teleportCar(x, z, heading){ car.position.set(x, 0, z); if (heading !== undefined){ S.carHeading = heading; } S.carSpeed = 0; },
+  teleportCar(x, z, heading){ activeCar.position.set(x, 0, z); if (heading !== undefined){ S.carHeading = heading; } S.carSpeed = 0; },
   teleportChar(x, z){ character.position.set(x, 0, z); },
   setCam(yaw, pitch){ S.camYaw = yaw; if (pitch !== undefined) S.camPitch = pitch; S.dragTimer = 2.5; },
 };

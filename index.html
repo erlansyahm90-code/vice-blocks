@@ -92,6 +92,8 @@
   .tcRound{border-radius:50%}
   #tcF{width:66px;height:66px;font-size:25px;background:rgba(255,216,61,.4)}
   #tcF.on{background:rgba(255,216,61,.75);color:#14101c}
+  #tcFire{width:66px;height:66px;font-size:13px;background:rgba(255,80,60,.42)}
+  #tcFire.on{background:rgba(255,80,60,.85);color:#fff}
   #tcRun{width:58px;height:42px;font-size:13px;letter-spacing:1px;border-radius:21px}
 </style>
 </head>
@@ -107,7 +109,7 @@
   </div>
   <div id="healthWrap">HEALTH<div id="healthBar"><div id="healthFill"></div></div></div>
   <div id="minimapWrap"><canvas id="minimap" width="184" height="184"></canvas></div>
-  <div id="weapon"><div class="wname">PISTOL</div><div class="ammo">12 <small>/ 120</small></div></div>
+  <div id="weapon"><div class="wname">PISTOL</div><div class="ammo" id="ammo">12 <small>/ 120</small></div></div>
   <div id="speedo"><b>0</b> km/h</div>
   <div id="prompt"><b>F</b>Masuk Mobil</div>
 </div>
@@ -121,6 +123,9 @@
     <div class="tcCol">
       <button class="tcBtn" id="tcUp" aria-label="Maju">&#9650;</button>
       <button class="tcBtn" id="tcDown" aria-label="Mundur">&#9660;</button>
+    </div>
+    <div class="tcCol">
+      <button class="tcBtn tcRound" id="tcFire" aria-label="Tembak">TEMBAK</button>
     </div>
     <div class="tcCol">
       <button class="tcBtn" id="tcRun" aria-label="Lari">LARI</button>
@@ -140,7 +145,8 @@
   <div class="card" id="howCard" style="display:none">
     <div><b>W A S D / &#8592;&#8593;&#8595;&#8594;</b> Jalan / Nyetir</div>
     <div><b>SHIFT</b> Lari (saat jalan kaki)</div>
-    <div><b>F</b> Masuk / Keluar Mobil</div>
+    <div><b>F</b> Masuk / Keluar Mobil — semua mobil di kota bisa dinaiki</div>
+    <div><b>J / tombol TEMBAK</b> Menembak &nbsp;·&nbsp; <b>R</b> Isi ulang peluru</div>
     <div><b>Seret layar</b> Putar kamera</div>
     <div><b>ESC / P</b> Pause</div>
     <div style="margin-top:8px;color:#ffd9ec">Misi 1: capai pilar cahaya pink di <b style="min-width:0;color:#ff7ac0">Pink Motel</b>, lanjut ke dermaga. Di HP pakai tombol di layar.</div>
