@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VICE BLOCKS — Mini Open World (Latihan)</title>
+<link rel="icon" href="data:,">
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#1a0f24;font-family:'Segoe UI',Arial,sans-serif;-webkit-user-select:none;user-select:none}
+  #game{position:fixed;inset:0}
+  canvas.webgl{display:block}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+  #missionText{position:absolute;top:14px;left:50%;transform:translateX(-50%);text-align:center;color:#fff;
+    font-size:20px;font-weight:700;letter-spacing:.5px;text-shadow:0 2px 6px rgba(0,0,0,.8);white-space:nowrap}
+  #missionText small{display:block;font-size:13px;font-weight:400;color:#ffd9ec;margin-top:2px}
+  #banner{position:absolute;top:22%;left:50%;transform:translate(-50%,-50%) scale(.8);text-align:center;opacity:0;
+    transition:opacity .25s,transform .25s;color:#ffe95c;font-size:46px;font-weight:900;font-style:italic;
+    text-shadow:0 0 18px rgba(255,120,180,.9),0 3px 0 #b03060,0 6px 14px rgba(0,0,0,.7);letter-spacing:1px;white-space:nowrap}
+  #banner small{display:block;font-size:26px;color:#7dffcb;font-style:normal}
+  #banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #topRight{position:absolute;top:14px;right:18px;text-align:right;color:#fff}
+  #money{font-size:30px;font-weight:800;color:#7dff8a;text-shadow:0 2px 5px rgba(0,0,0,.8)}
+  #stars{font-size:24px;letter-spacing:3px;color:#ffd83d;text-shadow:0 2px 5px rgba(0,0,0,.8);min-height:30px}
+  #stars .off{color:rgba(255,255,255,.25)}
+  #minimapWrap{position:absolute;left:18px;bottom:18px;width:184px;height:184px;border-radius:50%;
+    border:4px solid rgba(20,20,30,.85);box-shadow:0 4px 18px rgba(0,0,0,.6);overflow:hidden;background:#20222a}
+  #minimap{width:184px;height:184px;display:block}
+  #healthWrap{position:absolute;left:24px;bottom:212px;width:170px;color:#fff;font-size:11px;letter-spacing:1px;text-shadow:0 1px 3px #000}
+  #healthBar{height:10px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.5);border-radius:5px;margin-top:3px;overflow:hidden}
+  #healthFill{height:100%;width:100%;background:linear-gradient(90deg,#ff5f6d,#ffc371);transition:width .2s}
+  #weapon{position:absolute;right:18px;bottom:18px;text-align:right;color:#fff;text-shadow:0 2px 5px rgba(0,0,0,.85)}
+  #weapon .wname{font-size:15px;font-weight:700;letter-spacing:2px;color:#ffd9ec}
+  #weapon .ammo{font-size:30px;font-weight:800}
+  #weapon .ammo small{font-size:16px;color:#bbb}
+  #prompt{position:absolute;left:50%;bottom:15%;transform:translateX(-50%);background:rgba(10,10,18,.78);color:#fff;
+    padding:9px 18px;border-radius:8px;font-size:16px;border:1px solid rgba(255,255,255,.35);display:none}
+  #prompt b{background:#ffd83d;color:#111;border-radius:4px;padding:1px 8px;margin-right:8px}
+  #speedo{position:absolute;right:18px;bottom:92px;color:#fff;font-size:13px;text-align:right;text-shadow:0 1px 3px #000;display:none}
+  #speedo b{font-size:22px}
+
+  /* ---------- Overlays ---------- */
+  .overlay{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 65%,rgba(255,110,160,.25),rgba(10,4,24,.88) 70%);color:#fff;text-align:center;cursor:pointer}
+  .overlay h1{font-size:64px;margin:0;font-style:italic;font-weight:900;letter-spacing:2px;
+    background:linear-gradient(180deg,#7df9ff 15%,#ff7ac0 60%,#ffd83d);-webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 4px 0 rgba(90,10,60,.85)) drop-shadow(0 8px 22px rgba(0,0,0,.6))}
+  .overlay h2{margin:4px 0 18px;font-weight:400;letter-spacing:6px;color:#ffd9ec;font-size:16px}
+  .overlay .card{background:rgba(8,6,18,.72);border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:16px 26px;font-size:15px;line-height:1.75;text-align:left}
+  .overlay .card b{display:inline-block;min-width:86px;color:#ffd83d}
+  .overlay .go{margin-top:22px;font-size:19px;font-weight:700;color:#7dffcb;animation:pulse 1.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  #pauseOverlay{display:none;cursor:default}
+  #pauseOverlay .btns{margin-top:10px;display:flex;gap:14px}
+  #pauseOverlay button{pointer-events:auto;font-size:17px;font-weight:700;padding:11px 30px;border-radius:9px;border:2px solid #ff7ac0;
+    background:rgba(30,8,30,.85);color:#fff;cursor:pointer}
+  #pauseOverlay button:hover{background:#ff7ac0;color:#14101c}
+
+  /* ---------- Kotak error (diagnostik di overlay awal) ---------- */
+  #vbError{display:none;max-width:88%;margin-top:16px;background:rgba(120,8,16,.92);border:2px solid #ff5f6d;border-radius:10px;
+    color:#fff;font:12px/1.5 Consolas,Menlo,monospace;padding:10px 14px;text-align:left;white-space:pre-wrap;word-break:break-word}
+
+  /* ---------- Kontrol sentuh (hanya perangkat sentuh) ---------- */
+  #touchControls{position:fixed;inset:0;pointer-events:none;z-index:6;display:none}
+  body.touch #touchControls{display:block}
+  @media (pointer:coarse){ #touchControls{display:block} }
+  .tcCluster{position:absolute;display:flex;gap:12px;pointer-events:none}
+  .tcLeft{left:12px;bottom:248px}
+  .tcRight{right:12px;bottom:118px;align-items:flex-end}
+  .tcCol{display:flex;flex-direction:column;gap:12px;align-items:center;pointer-events:none}
+  .tcBtn{pointer-events:auto;width:58px;height:58px;border-radius:16px;border:2px solid rgba(255,255,255,.5);
+    background:rgba(12,10,24,.5);color:#fff;font-size:22px;font-weight:700;line-height:1;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;touch-action:none;-webkit-tap-highlight-color:transparent}
+  .tcBtn.on{background:rgba(255,122,192,.6);border-color:#ffd9ec}
+  .tcRound{border-radius:50%}
+  #tcF{width:66px;height:66px;font-size:25px;background:rgba(255,216,61,.4)}
+  #tcF.on{background:rgba(255,216,61,.75);color:#14101c}
+  #tcRun{width:58px;height:42px;font-size:13px;letter-spacing:1px;border-radius:21px}
+</style>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="hud">
+  <div id="missionText">VICE BLOCKS<small>Memuat kota…</small></div>
+  <div id="banner">MISSION PASSED<small>+$500</small></div>
+  <div id="topRight">
+    <div id="stars"></div>
+    <div id="money">$0</div>
+  </div>
+  <div id="healthWrap">HEALTH<div id="healthBar"><div id="healthFill"></div></div></div>
+  <div id="minimapWrap"><canvas id="minimap" width="184" height="184"></canvas></div>
+  <div id="weapon"><div class="wname">PISTOL</div><div class="ammo">12 <small>/ 120</small></div></div>
+  <div id="speedo"><b>0</b> km/h</div>
+  <div id="prompt"><b>F</b>Masuk Mobil</div>
+</div>
+
+<div id="touchControls">
+  <div class="tcCluster tcLeft">
+    <button class="tcBtn" id="tcLeft" aria-label="Kiri">&#9664;</button>
+    <button class="tcBtn" id="tcRight" aria-label="Kanan">&#9654;</button>
+  </div>
+  <div class="tcCluster tcRight">
+    <div class="tcCol">
+      <button class="tcBtn" id="tcUp" aria-label="Maju">&#9650;</button>
+      <button class="tcBtn" id="tcDown" aria-label="Mundur">&#9660;</button>
+    </div>
+    <div class="tcCol">
+      <button class="tcBtn" id="tcRun" aria-label="Lari">LARI</button>
+      <button class="tcBtn tcRound" id="tcF" aria-label="Masuk atau keluar mobil">F</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <h1>VICE BLOCKS</h1>
+  <h2>MINI OPEN WORLD &mdash; LATIHAN</h2>
+  <div class="card">
+    <div><b>W A S D / ←↑→↓</b> Jalan / Nyetir</div>
+    <div><b>SHIFT</b> Lari (saat jalan kaki)</div>
+    <div><b>F</b> Masuk / Keluar Mobil</div>
+    <div><b>Mouse drag</b> Putar kamera</div>
+    <div><b>ESC / P</b> Pause</div>
+    <div style="margin-top:8px;color:#ffd9ec">Misi 1: capai pilar cahaya pink di <b style="min-width:0;color:#ff7ac0">Pink Motel</b></div>
+  </div>
+  <div class="go">&#9654; KLIK UNTUK MULAI</div>
+  <div id="vbError" role="alert"></div>
+</div>
+
+<script>
+// Bootstrap mandiri VICE BLOCKS: mulai game + tangkap error.
+// Sengaja TIDAK bergantung pada three.min.js / game.js — kalau salah satu gagal
+// dimuat di browser HP, overlay tetap hidup dan error tampil, tidak mati diam-diam.
+(function(){
+  window.__vbStarted = false;
+  var box = document.getElementById('vbError');
+  function showError(msg){
+    window.__vbLastError = msg;
+    if (!box) return;
+    box.style.display = 'block';
+    if (box.textContent.indexOf(msg) === -1) box.textContent += (box.textContent ? '\n' : '') + msg;
+  }
+  window.__vbShowError = showError;
+  window.addEventListener('error', function(e){
+    var m = (e && e.message) || (e && e.error && e.error.message) || '';
+    if (m) showError('Error: ' + m);
+  });
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) document.body.classList.add('touch');
+  var ov = document.getElementById('startOverlay');
+  function tryStart(){
+    window.__vbStarted = true;
+    if (window.PG && typeof window.PG.start === 'function'){
+      window.PG.start();
+      if (ov) ov.style.display = 'none';
+      return true;
+    }
+    return false;
+  }
+  function start(){
+    if (tryStart()) return;
+    var n = 0;
+    var iv = setInterval(function(){
+      n++;
+      if (tryStart()){ clearInterval(iv); return; }
+      if (n >= 40){
+        clearInterval(iv);
+        showError('Game gagal dimuat (mesin game tidak merespons). Coba muat ulang halaman ini.');
+      }
+    }, 100);
+  }
+  if (ov){
+    ov.addEventListener('click', start);
+    ov.addEventListener('touchend', function(e){ e.preventDefault(); start(); }, { passive:false });
+  }
+})();
+</script>
+
+<div class="overlay" id="pauseOverlay">
+  <h1>PAUSED</h1>
+  <div class="btns">
+    <button id="btnResume">RESUME</button>
+    <button id="btnRestart">RESTART</button>
+  </div>
+</div>
+
+<script src="js/three.min.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
